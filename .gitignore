@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Generated proto stubs
+proto/generated/*.py
+!proto/generated/__init__.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+test_results/
+
+# Node / React
+node_modules/
+test_harness/test_dashboard/node_modules/
+test_harness/test_dashboard/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

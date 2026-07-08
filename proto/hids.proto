@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package hids;
+
+// Common message types
+message LoginRecord {
+  string username = 1;
+  int64 timestamp = 2;  // Unix timestamp
+  string source_ip = 3;
+  string status = 4;  // "success" or "fail"
+  string attempt_id = 5;
+}
+
+message Alert {
+  string alert_id = 1;
+  string severity = 2;  // LOW, MEDIUM, HIGH, CRITICAL
+  string attack_type = 3;  // brute_force, credential_stuffing, etc.
+  string username = 4;
+  int32 failed_attempts = 5;
+  string description = 6;
+  int64 timestamp = 7;
+  string source_ip = 8;
+}
+
+message Command {
+  string command_type = 1;  // lock_account, stop_service, disconnect_network, shutdown_device, ignore
+  string target_username = 2;
+  string alert_id = 3;
+  string signature = 4;  // HMAC signature for auth
+  string service_name = 5;  // Optional, for stop_service
+}
+
+message CommandResult {
+  bool success = 1;
+  string message = 2;
+  string alert_id = 3;
+}
+
+message Ack {
+  bool received = 1;
+}
+
+message Empty {}
+
+// Services
+service AnalysisService {
+  // Audit log node streams login records to analysis server
+  rpc SendLoginHistory(stream LoginRecord) returns (Ack);
+  
+  // HIDS subscribes to alerts from analysis server
+  rpc SubscribeAlerts(Empty) returns (stream Alert);
+}
+
+service AgentService {
+  // HIDS sends commands to agent for execution
+  rpc ExecuteCommand(Command) returns (CommandResult);
+}

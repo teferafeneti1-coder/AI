@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HIDS — Security Dashboard</title>
+  <style>
+    /* ── Reset & base ────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+    }
+    a { color: #58a6ff; text-decoration: none; }
+
+    /* ── Layout ─────────────────────────────────────── */
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: .05em; color: #f0f6fc; }
+    header span { font-size: .85rem; color: #8b949e; }
+
+    main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+
+    /* ── Status banner ──────────────────────────────── */
+    .status-banner {
+      border-radius: 8px;
+      padding: .75rem 1.25rem;
+      margin-bottom: 1.5rem;
+      font-weight: 700;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .status-banner.Normal       { background: #1f3d2b; color: #56d364; border: 1px solid #238636; }
+    .status-banner.Warning      { background: #3d2e00; color: #e3b341; border: 1px solid #9e6a03; }
+    .status-banner["Under Attack"] { background: #3d1c1c; color: #f85149; border: 1px solid #da3633; }
+    .status-icon { font-size: 1.4rem; }
+
+    /* ── Section cards ──────────────────────────────── */
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 {
+      font-size: .95rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Alert table ─────────────────────────────────── */
+    .alert-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .9rem;
+    }
+    .alert-table th {
+      text-align: left;
+      padding: .5rem .75rem;
+      background: #21262d;
+      color: #8b949e;
+      font-weight: 600;
+      border-bottom: 1px solid #30363d;
+    }
+    .alert-table td {
+      padding: .5rem .75rem;
+      border-bottom: 1px solid #21262d;
+      vertical-align: top;
+      max-width: 250px;
+      word-break: break-word;
+    }
+    .alert-table tr:hover td { background: #1c2128; }
+
+    /* ── Severity badges ────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: .2rem .55rem;
+      border-radius: 4px;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .badge-CRITICAL { background: #4b1c1c; color: #ff7b72; border: 1px solid #da3633; }
+    .badge-HIGH     { background: #3d1c1c; color: #f85149; border: 1px solid #b91c1c; }
+    .badge-MEDIUM   { background: #3d2e00; color: #e3b341; border: 1px solid #9e6a03; }
+    .badge-LOW      { background: #1f3038; color: #79c0ff; border: 1px solid #1f6feb; }
+
+    /* ── Recommended actions ────────────────────────── */
+    .actions-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+    }
+    .btn {
+      padding: .5rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .9rem;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-ignore       { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+    .btn-lock         { background: #1f6feb; color: #fff; }
+    .btn-service      { background: #9e6a03; color: #fff; }
+    .btn-network      { background: #6e40c9; color: #fff; }
+    .btn-shutdown     { background: #da3633; color: #fff; }
+    .btn-shutdown-net { background: #b91c1c; color: #fff; }
+
+    /* ── Filter bar ──────────────────────────────────── */
+    .filter-bar {
+      display: flex;
+      gap: .75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .filter-bar input, .filter-bar select {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: .4rem .75rem;
+      border-radius: 6px;
+      font-size: .88rem;
+    }
+    .filter-bar button {
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: .4rem .9rem;
+      cursor: pointer;
+      font-size: .88rem;
+    }
+
+    /* ── Toast notification ──────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+    .toast {
+      background: #1f2937;
+      border-left: 4px solid #f85149;
+      padding: .75rem 1rem;
+      border-radius: 6px;
+      min-width: 280px;
+      max-width: 380px;
+      font-size: .88rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+      animation: fadeIn .2s ease;
+    }
+    .toast.CRITICAL { border-color: #ff7b72; }
+    .toast.HIGH     { border-color: #f85149; }
+    .toast.MEDIUM   { border-color: #e3b341; }
+    .toast.LOW      { border-color: #79c0ff; }
+    .toast-title    { font-weight: 700; margin-bottom: .25rem; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Modal ───────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 2rem;
+      max-width: 420px;
+      width: 90%;
+    }
+    .modal h3 { color: #f85149; margin-bottom: .75rem; }
+    .modal p  { color: #c9d1d9; margin-bottom: 1.25rem; font-size: .95rem; }
+    .modal-actions { display: flex; gap: .75rem; justify-content: flex-end; }
+    .btn-cancel { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+
+    /* ── Timestamp ───────────────────────────────────── */
+    .ts { color: #8b949e; font-size: .82rem; white-space: nowrap; }
+
+    /* ── Current alert highlight ─────────────────────── */
+    .current-alert-detail {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .6rem 1.5rem;
+      font-size: .9rem;
+    }
+    .current-alert-detail dt { color: #8b949e; }
+    .current-alert-detail dd { color: #f0f6fc; font-weight: 500; }
+
+    #connection-status {
+      font-size: .8rem;
+      padding: .25rem .6rem;
+      border-radius: 20px;
+      background: #21262d;
+    }
+    #connection-status.connected    { color: #56d364; }
+    #connection-status.disconnected { color: #f85149; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛡 HIDS Security Dashboard</h1>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <span id="connection-status" class="disconnected">● Disconnected</span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- System Status -->
+  {% set status_icon = {'Normal': '✅', 'Warning': '⚠️', 'Under Attack': '🚨'} %}
+  <div class="status-banner {{ status }}" id="status-banner">
+    <span class="status-icon">{{ status_icon.get(status, '🔵') }}</span>
+    System Status: <span id="status-text">{{ status }}</span>
+  </div>
+
+  <!-- Current Alert -->
+  <div class="card">
+    <h2>Current Alert</h2>
+    <div id="current-alert-section">
+      {% if current_alert %}
+        {% include 'partials/alert_detail.html' with context %}
+      {% else %}
+        <p style="color:#8b949e;">No active alerts.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recommended Actions -->
+  <div class="card">
+    <h2>Recommended Actions</h2>
+    <p style="font-size:.85rem;color:#8b949e;margin-bottom:.75rem;">
+      Actions apply to the current alert's username/machine. Confirm destructive actions before sending.
+    </p>
+    <div class="actions-grid">
+      <button class="btn btn-ignore"       onclick="doAction('ignore')">Ignore</button>
+      <button class="btn btn-lock"         onclick="doAction('lock_account')">🔒 Lock Account</button>
+      <button class="btn btn-service"      onclick="doAction('stop_service')">⛔ Stop Service</button>
+      <button class="btn btn-network"      onclick="confirmAction('disconnect_network', 'Disconnect Network', 'This will disable the network adapter on the remote machine.')">📡 Disconnect Network</button>
+      <button class="btn btn-shutdown"     onclick="confirmAction('shutdown_device', 'Shutdown Device', 'This will immediately shut down the remote machine. This action is irreversible until the machine is powered back on.')">⚡ Shutdown Device</button>
+      <button class="btn btn-shutdown-net" onclick="confirmAction('shutdown_and_disconnect', 'Shutdown + Disconnect', 'This will disconnect the network AND shut down the remote machine. Confirm to proceed.')">💥 Shutdown + Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Alert History -->
+  <div class="card">
+    <h2>Alert History</h2>
+    <div class="filter-bar">
+      <select id="filter-severity">
+        <option value="">All Severities</option>
+        <option value="CRITICAL">CRITICAL</option>
+        <option value="HIGH">HIGH</option>
+        <option value="MEDIUM">MEDIUM</option>
+        <option value="LOW">LOW</option>
+      </select>
+      <input type="text" id="filter-username" placeholder="Filter by username…" />
+      <button onclick="loadHistory()">Apply</button>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th>Alert ID</th>
+          <th>Severity</th>
+          <th>Attack Type</th>
+          <th>Username</th>
+          <th>Source IP</th>
+          <th>Failed</th>
+          <th>Time</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody id="history-tbody">
+        {% for a in recent_alerts %}
+        <tr data-alert-id="{{ a.alert_id }}"
+            data-username="{{ a.username }}"
+            data-alert-type="{{ a.attack_type }}"
+            onclick="selectAlert(this)">
+          <td style="font-family:monospace;font-size:.8rem;">{{ a.alert_id[:8] }}…</td>
+          <td><span class="badge badge-{{ a.severity }}">{{ a.severity }}</span></td>
+          <td>{{ a.attack_type }}</td>
+          <td>{{ a.username }}</td>
+          <td>{{ a.source_ip }}</td>
+          <td>{{ a.failed_attempts }}</td>
+          <td class="ts">{{ a.timestamp }}</td>
+          <td>{{ a.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<!-- Confirmation Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="modal-title">⚠ Confirm Action</h3>
+    <p id="modal-body"></p>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-shutdown" id="modal-confirm-btn" onclick="confirmAndSend()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- SocketIO client -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+
+// ── State ──────────────────────────────────────────────────────────────────
+let currentAlert = {{ current_alert | tojson if current_alert else 'null' }};
+let pendingAction = null;
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── SocketIO ───────────────────────────────────────────────────────────────
+const socket = io({ transports: ['websocket', 'polling'] });
+
+socket.on('connect', () => {
+  const el = document.getElementById('connection-status');
+  el.textContent = '● Live';
+  el.className = 'connected';
+});
+
+socket.on('disconnect', () => {
+  const el = document.getElementById('connection-status');
+  el.textContent = '● Disconnected';
+  el.className = 'disconnected';
+});
+
+socket.on('new_alert', (alert) => {
+  currentAlert = alert;
+  renderCurrentAlert(alert);
+  prependHistoryRow(alert);
+  updateStatus(alert.severity);
+  showToast(alert);
+});
+
+// ── Render current alert ───────────────────────────────────────────────────
+function renderCurrentAlert(a) {
+  const ts = new Date(a.timestamp * 1000).toLocaleString();
+  document.getElementById('current-alert-section').innerHTML = `
+    <dl class="current-alert-detail">
+      <dt>Alert ID</dt>   <dd style="font-family:monospace;font-size:.85rem;">${a.alert_id}</dd>
+      <dt>Severity</dt>   <dd><span class="badge badge-${a.severity}">${a.severity}</span></dd>
+      <dt>Attack Type</dt><dd>${a.attack_type}</dd>
+      <dt>Username</dt>   <dd>${a.username}</dd>
+      <dt>Source IP</dt>  <dd>${a.source_ip || '—'}</dd>
+      <dt>Failed Attempts</dt><dd>${a.failed_attempts}</dd>
+      <dt>Time</dt>       <dd class="ts">${ts}</dd>
+      <dt>Description</dt><dd style="grid-column:span 2;">${a.description}</dd>
+    </dl>`;
+}
+
+// ── Prepend row in history table ───────────────────────────────────────────
+function prependHistoryRow(a) {
+  const ts = new Date(a.timestamp * 1000).toLocaleString();
+  const tbody = document.getElementById('history-tbody');
+  const tr = document.createElement('tr');
+  tr.dataset.alertId = a.alert_id;
+  tr.dataset.username = a.username;
+  tr.dataset.alertType = a.attack_type;
+  tr.setAttribute('onclick', 'selectAlert(this)');
+  tr.innerHTML = `
+    <td style="font-family:monospace;font-size:.8rem;">${a.alert_id.slice(0,8)}…</td>
+    <td><span class="badge badge-${a.severity}">${a.severity}</span></td>
+    <td>${a.attack_type}</td>
+    <td>${a.username}</td>
+    <td>${a.source_ip || '—'}</td>
+    <td>${a.failed_attempts}</td>
+    <td class="ts">${ts}</td>
+    <td>${a.description}</td>`;
+  tbody.prepend(tr);
+}
+
+// ── Status banner ──────────────────────────────────────────────────────────
+const STATUS_PRIORITY = { CRITICAL: 3, HIGH: 3, MEDIUM: 2, LOW: 1 };
+const STATUS_MAP = { 3: 'Under Attack', 2: 'Warning', 1: 'Normal' };
+
+function updateStatus(severity) {
+  const p = STATUS_PRIORITY[severity] || 1;
+  const text = STATUS_MAP[p] || 'Normal';
+  const icons = { 'Normal': '✅', 'Warning': '⚠️', 'Under Attack': '🚨' };
+  const banner = document.getElementById('status-banner');
+  banner.className = `status-banner ${text}`;
+  banner.innerHTML = `<span class="status-icon">${icons[text]}</span> System Status: <span id="status-text">${text}</span>`;
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(alert) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${alert.severity}`;
+  toast.innerHTML = `<div class="toast-title">${alert.severity} — ${alert.attack_type}</div>
+    <div>${alert.username} · ${alert.source_ip || ''}</div>
+    <div style="color:#8b949e;font-size:.8rem;">${alert.description.slice(0, 90)}</div>`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 8000);
+}
+
+// ── Select alert from table (sets as current for actions) ─────────────────
+function selectAlert(row) {
+  // Highlight
+  document.querySelectorAll('#history-tbody tr').forEach(r => r.style.background = '');
+  row.style.background = '#1f2937';
+  // We'd need to fetch full alert by id — use data attributes for now
+  if (currentAlert && currentAlert.alert_id === row.dataset.alertId) return;
+  // Minimal update from row data
+  currentAlert = {
+    alert_id: row.dataset.alertId,
+    username: row.dataset.username,
+    attack_type: row.dataset.alertType,
+  };
+}
+
+// ── Action dispatch ────────────────────────────────────────────────────────
+function doAction(commandType, serviceName = '') {
+  if (!currentAlert) {
+    showToast({ severity: 'LOW', attack_type: 'No active alert selected',
+                username: '', source_ip: '', description: 'Select or wait for an alert first.' });
+    return;
+  }
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      command_type: commandType,
+      target_username: currentAlert.username || '',
+      alert_id: currentAlert.alert_id || '',
+      service_name: serviceName,
+    }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    showToast({
+      severity: data.success ? 'LOW' : 'HIGH',
+      attack_type: data.success ? '✓ Command Sent' : '✗ Command Failed',
+      username: commandType,
+      source_ip: '',
+      description: data.message,
+    });
+  })
+  .catch(err => console.error('Command error:', err));
+}
+
+// ── Confirm modal ──────────────────────────────────────────────────────────
+function confirmAction(commandType, title, body) {
+  pendingAction = commandType;
+  document.getElementById('modal-title').textContent = `⚠ ${title}`;
+  document.getElementById('modal-body').textContent = body;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
+function closeModal() {
+  pendingAction = null;
+  document.getElementById('confirm-modal').classList.remove('open');
+}
+
+function confirmAndSend() {
+  closeModal();
+  if (!pendingAction) return;
+  if (pendingAction === 'shutdown_and_disconnect') {
+    doAction('disconnect_network');
+    setTimeout(() => doAction('shutdown_device'), 800);
+  } else {
+    doAction(pendingAction);
+  }
+}
+
+// Close modal on overlay click
+document.getElementById('confirm-modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ── Load history with filters ──────────────────────────────────────────────
+function loadHistory() {
+  const sev = document.getElementById('filter-severity').value;
+  const usr = document.getElementById('filter-username').value;
+  let url = `/api/alerts?limit=100`;
+  if (sev) url += `&severity=${encodeURIComponent(sev)}`;
+  if (usr) url += `&username=${encodeURIComponent(usr)}`;
+
+  fetch(url).then(r => r.json()).then(alerts => {
+    const tbody = document.getElementById('history-tbody');
+    tbody.innerHTML = '';
+    alerts.forEach(a => prependHistoryRow(a));
+  });
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% if current_alert %}
+<dl class="current-alert-detail">
+  <dt>Alert ID</dt>
+  <dd style="font-family:monospace;font-size:.85rem;">{{ current_alert.alert_id }}</dd>
+
+  <dt>Severity</dt>
+  <dd><span class="badge badge-{{ current_alert.severity }}">{{ current_alert.severity }}</span></dd>
+
+  <dt>Attack Type</dt>
+  <dd>{{ current_alert.attack_type }}</dd>
+
+  <dt>Username</dt>
+  <dd>{{ current_alert.username }}</dd>
+
+  <dt>Source IP</dt>
+  <dd>{{ current_alert.source_ip or '—' }}</dd>
+
+  <dt>Failed Attempts</dt>
+  <dd>{{ current_alert.failed_attempts }}</dd>
+
+  <dt>Time</dt>
+  <dd class="ts">{{ current_alert.timestamp }}</dd>
+
+  <dt>Description</dt>
+  <dd style="grid-column: span 2;">{{ current_alert.description }}</dd>
+</dl>
+{% else %}
+<p style="color:#8b949e;">No active alerts.</p>
+{% endif %}
