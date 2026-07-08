@@ -1,23 +1,22 @@
-export default function LockedScreen({ username, onReset }) {
+export default function LockedScreen({ username, reason, onReset }) {
+  const msg = reason || 'This account has been locked by the HIDS administrator due to repeated failed login attempts.'
+
   return (
     <div style={s.wrapper}>
       <div style={s.card}>
         <div style={s.icon}>🔒</div>
         <h1 style={s.title}>Account Locked</h1>
-        <p style={s.msg}>
-          Account <code style={s.code}>{username}</code> has been locked by the
-          HIDS response system due to repeated failed login attempts.
-        </p>
+        <p style={s.msg}>{msg}</p>
 
         <div style={s.infoBox}>
-          <Row label="Account" value={username} />
+          <Row label="Account" value={<code style={s.code}>{username}</code>} />
           <Row label="Status"  value={<span style={{ color: '#f85149' }}>● Disabled</span>} />
-          <Row label="Action"  value="Lock Account (HIDS Response)" />
+          <Row label="Locked by" value="HIDS Administrator" />
           <Row label="Time"    value={new Date().toLocaleString()} />
         </div>
 
         <p style={s.note}>
-          ℹ️ An administrator must re-enable this account to restore access.
+          ℹ️ Contact your system administrator to restore access.
         </p>
 
         <button onClick={onReset} style={s.btn}>Reset Test Session</button>
@@ -37,20 +36,15 @@ function Row({ label, value }) {
 }
 
 const s = {
-  wrapper: { display: 'flex', alignItems: 'center', justifyContent: 'center',
-             width: '100%', padding: '1rem' },
+  wrapper: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '1rem' },
   card: {
-    background: '#161b22',
-    border: '1px solid #b91c1c',
-    borderRadius: '14px',
-    padding: '2.5rem',
-    width: '100%',
-    maxWidth: '420px',
-    textAlign: 'center',
+    background: '#161b22', border: '1px solid #b91c1c',
+    borderRadius: '14px', padding: '2.5rem',
+    width: '100%', maxWidth: '420px', textAlign: 'center',
   },
   icon:  { fontSize: '3.5rem', marginBottom: '1rem' },
   title: { fontSize: '1.6rem', fontWeight: '700', color: '#f85149', marginBottom: '0.75rem' },
-  msg:   { fontSize: '0.9rem', color: '#c9d1d9', lineHeight: '1.5', marginBottom: '1.5rem' },
+  msg:   { fontSize: '0.9rem', color: '#c9d1d9', lineHeight: '1.6', marginBottom: '1.5rem' },
   code: {
     background: '#21262d', padding: '0.15rem 0.4rem',
     borderRadius: '4px', fontFamily: 'monospace', color: '#79c0ff',

@@ -10,11 +10,29 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
+def _notify_login_api_locked(username: str) -> None:
+    """
+    Tell login_api.py that this account is now OS-locked so the
+    login page immediately shows 'Account Locked' without needing
+    a page refresh. Uses a direct in-process call if running together,
+    or falls back silently if running separately.
+    """
+    try:
+        from login_api import set_account_locked
+        set_account_locked(
+            username,
+            reason="This account has been locked by the HIDS administrator."
+        )
+    except Exception as e:
+        logger.warning("Could not notify login_api of lock: %s", e)
+
+
 # ─── Windows implementations ─────────────────────────────────────────────────
 
 def _win_lock_account(username: str) -> tuple[bool, str]:
     """
     Lock/disable a Windows user account via `net user <user> /active:no`.
+    Also notifies login_api so the login page shows "Account Locked".
     """
     try:
         subprocess.run(
@@ -23,6 +41,7 @@ def _win_lock_account(username: str) -> tuple[bool, str]:
             capture_output=True,
             text=True,
         )
+        _notify_login_api_locked(username)
         return True, f"Account '{username}' locked successfully."
     except subprocess.CalledProcessError as e:
         return False, f"Failed to lock account: {e.stderr.strip()}"
@@ -95,6 +114,7 @@ def _win_shutdown() -> tuple[bool, str]:
 def _linux_lock_account(username: str) -> tuple[bool, str]:
     """
     Lock a Linux user account using `passwd -l <user>`.
+    Also notifies login_api so the login page shows "Account Locked".
     """
     try:
         subprocess.run(
@@ -103,6 +123,7 @@ def _linux_lock_account(username: str) -> tuple[bool, str]:
             capture_output=True,
             text=True,
         )
+        _notify_login_api_locked(username)
         return True, f"Account '{username}' locked."
     except subprocess.CalledProcessError as e:
         return False, f"Failed to lock account: {e.stderr.strip()}"
