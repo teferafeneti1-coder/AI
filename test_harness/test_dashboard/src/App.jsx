@@ -5,34 +5,29 @@ import LockedPage from './components/LockedPage'
 import SuccessPage from './components/SuccessPage'
 import AttemptLog from './components/AttemptLog'
 
-// ── Test credentials ───────────────────────────────────────────────────────
+// ── Valid credentials (checked silently — user types freely) ──────────────
 const VALID_USER = 'insa'
 const VALID_PASS = '1234'
 const MAX_ATTEMPTS = 5
-const SOURCE_IP = '192.168.1.100'  // simulated attacker IP
+const SOURCE_IP = '192.168.1.100'
 
 export default function App() {
-  const [screen, setScreen] = useState('login')  // login | alert | locked | success
-  const [failCount, setFailCount] = useState(0)
-  const [attempts, setAttempts] = useState([])   // full attempt history
-  const [alert, setAlert] = useState(null)
+  const [screen, setScreen]         = useState('login')
+  const [failCount, setFailCount]   = useState(0)
+  const [attempts, setAttempts]     = useState([])
+  const [alert, setAlert]           = useState(null)
   const [lastUsername, setLastUsername] = useState('')
 
-  // Send a simulated login event to the HIDS backend.
-  // Falls back gracefully if backend is not running (pure UI demo still works).
+  // Forward login event to HIDS backend (non-blocking, fails silently)
   const sendEventToHIDS = useCallback(async (username, status) => {
     try {
       await fetch('/api/test/login-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          source_ip: SOURCE_IP,
-          status,        // "success" | "fail"
-        }),
+        body: JSON.stringify({ username, source_ip: SOURCE_IP, status }),
       })
     } catch {
-      // Backend not reachable — test dashboard still works standalone
+      // backend not running — UI still works standalone
     }
   }, [])
 
@@ -40,37 +35,35 @@ export default function App() {
     const now = new Date()
     setLastUsername(username)
 
+    // ── Correct credentials ─────────────────────────────────────────────
     if (username === VALID_USER && password === VALID_PASS) {
-      // ── Correct credentials ──────────────────────────────────────────────
-      const entry = {
+      setAttempts(prev => [{
         id: Date.now(),
         username,
         status: 'success',
         time: now.toLocaleTimeString(),
         message: 'Login successful',
-      }
-      setAttempts(prev => [entry, ...prev])
+      }, ...prev])
       await sendEventToHIDS(username, 'success')
       setScreen('success')
       return
     }
 
-    // ── Wrong credentials ────────────────────────────────────────────────
+    // ── Wrong credentials ───────────────────────────────────────────────
     const newCount = failCount + 1
-    const entry = {
+    setAttempts(prev => [{
       id: Date.now(),
       username,
       status: 'fail',
       time: now.toLocaleTimeString(),
       message: `Attempt ${newCount}/${MAX_ATTEMPTS} — invalid credentials`,
-    }
-    setAttempts(prev => [entry, ...prev])
+    }, ...prev])
     await sendEventToHIDS(username, 'fail')
     setFailCount(newCount)
 
+    // ── 5th failure → HIDS alert ────────────────────────────────────────
     if (newCount >= MAX_ATTEMPTS) {
-      // ── Threshold hit → trigger alert ────────────────────────────────
-      const newAlert = {
+      setAlert({
         alert_id: crypto.randomUUID(),
         severity: 'HIGH',
         attack_type: 'brute_force',
@@ -78,13 +71,15 @@ export default function App() {
         source_ip: SOURCE_IP,
         failed_attempts: newCount,
         timestamp: Math.floor(Date.now() / 1000),
-        description: `${newCount} consecutive failed login attempts for user "${username}" from ${SOURCE_IP}.`,
-      }
-      setAlert(newAlert)
+        description:
+          `${newCount} consecutive failed login attempts for user "${username}" ` +
+          `from ${SOURCE_IP}. Brute-force attack detected.`,
+      })
       setScreen('alert')
     }
   }, [failCount, sendEventToHIDS])
 
+  // Full reset → back to clean login form
   const handleReset = useCallback(() => {
     setScreen('login')
     setFailCount(0)
@@ -93,11 +88,9 @@ export default function App() {
     setLastUsername('')
   }, [])
 
-  const handleLockAccount = useCallback(() => {
-    setScreen('locked')
-  }, [])
+  const handleLockAccount = useCallback(() => setScreen('locked'), [])
 
-  const handleDismissSuccess = useCallback(() => {
+  const handleLogout = useCallback(() => {
     setScreen('login')
     setFailCount(0)
     setAttempts([])
@@ -106,7 +99,7 @@ export default function App() {
 
   return (
     <div style={styles.root}>
-      {/* ── Left panel: current screen ─── */}
+      {/* ── Main panel ── */}
       <div style={styles.mainPanel}>
         {screen === 'login' && (
           <LoginPage
@@ -131,13 +124,17 @@ export default function App() {
         {screen === 'success' && (
           <SuccessPage
             username={lastUsername}
-            onLogout={handleDismissSuccess}
+            onLogout={handleLogout}
           />
         )}
       </div>
 
-      {/* ── Right panel: attempt log ─── */}
-      <AttemptLog attempts={attempts} failCount={failCount} maxAttempts={MAX_ATTEMPTS} />
+      {/* ── Right panel: live attempt log ── */}
+      <AttemptLog
+        attempts={attempts}
+        failCount={failCount}
+        maxAttempts={MAX_ATTEMPTS}
+      />
     </div>
   )
 }
