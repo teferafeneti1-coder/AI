@@ -137,6 +137,21 @@ def run() -> None:
     )
     poll_thread.start()
 
+    # Start inject API thread (accepts HTTP events from Agent login page)
+    try:
+        from inject_api import run as run_inject
+        inject_thread = threading.Thread(
+            target=run_inject,
+            args=(_event_queue, settings.inject_host, settings.inject_port),
+            daemon=True,
+            name="inject_api",
+        )
+        inject_thread.start()
+        log_json("inject_api_thread_started",
+                 host=settings.inject_host, port=settings.inject_port)
+    except Exception as e:
+        logger.warning("Could not start inject API: %s", e)
+
     # Send loop runs in main thread
     _send_loop(stub)
 
