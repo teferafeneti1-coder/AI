@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     audit_host: str = Field(default="localhost", env="AUDIT_HOST")
     audit_inject_port: int = Field(default=8081, env="AUDIT_INJECT_PORT")
 
+    # Supabase — used for user credential storage and account locking
+    supabase_url: str = Field(default="", env="SUPABASE_URL")
+    supabase_key: str = Field(default="", env="SUPABASE_KEY")   # anon/service-role key
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

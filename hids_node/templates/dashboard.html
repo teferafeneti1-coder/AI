@@ -224,7 +224,7 @@
 <body>
 
 <header>
-  <h1>🛡 HIDS Security Dashboard</h1>
+  <h1>HIDS Security Dashboard</h1>
   <div style="display:flex;align-items:center;gap:1rem;">
     <span id="connection-status" class="disconnected">● Disconnected</span>
     <span id="clock"></span>
@@ -234,9 +234,9 @@
 <main>
 
   <!-- System Status -->
-  {% set status_icon = {'Normal': '✅', 'Warning': '⚠️', 'Under Attack': '🚨'} %}
+  {% set status_label = {'Normal': 'Normal', 'Warning': 'Warning', 'Under Attack': 'Under Attack'} %}
   <div class="status-banner {{ status }}" id="status-banner">
-    <span class="status-icon">{{ status_icon.get(status, '🔵') }}</span>
+    <span class="status-icon"></span>
     System Status: <span id="status-text">{{ status }}</span>
   </div>
 
@@ -256,15 +256,40 @@
   <div class="card">
     <h2>Recommended Actions</h2>
     <p style="font-size:.85rem;color:#8b949e;margin-bottom:.75rem;">
-      Actions apply to the current alert's username/machine. Confirm destructive actions before sending.
+      Actions apply to the current alert's username/machine. Destructive actions require confirmation.
     </p>
+
+    <!-- Stop Service row — requires a service name before sending -->
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem;align-items:center;flex-wrap:wrap;">
+      <input id="service-name-input"
+             type="text"
+             placeholder="Service name (e.g. wuauserv)"
+             style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;
+                    padding:.4rem .75rem;border-radius:6px;font-size:.88rem;min-width:220px;" />
+      <button class="btn btn-service"
+              onclick="doActionWithService('stop_service')">
+        Stop Service
+      </button>
+    </div>
+
     <div class="actions-grid">
-      <button class="btn btn-ignore"       onclick="doAction('ignore')">Ignore</button>
-      <button class="btn btn-lock"         onclick="doAction('lock_account')">🔒 Lock Account</button>
-      <button class="btn btn-service"      onclick="doAction('stop_service')">⛔ Stop Service</button>
-      <button class="btn btn-network"      onclick="confirmAction('disconnect_network', 'Disconnect Network', 'This will disable the network adapter on the remote machine.')">📡 Disconnect Network</button>
-      <button class="btn btn-shutdown"     onclick="confirmAction('shutdown_device', 'Shutdown Device', 'This will immediately shut down the remote machine. This action is irreversible until the machine is powered back on.')">⚡ Shutdown Device</button>
-      <button class="btn btn-shutdown-net" onclick="confirmAction('shutdown_and_disconnect', 'Shutdown + Disconnect', 'This will disconnect the network AND shut down the remote machine. Confirm to proceed.')">💥 Shutdown + Disconnect</button>
+      <button class="btn btn-ignore"   onclick="doAction('ignore')">Ignore</button>
+      <button class="btn btn-lock"     onclick="doAction('lock_account')">Lock Account</button>
+      <button class="btn btn-network"
+              onclick="confirmAction('disconnect_network', 'Disconnect Network',
+                'This will disable the network adapter on the remote machine. The agent will go offline.')">
+        Disconnect Network
+      </button>
+      <button class="btn btn-shutdown"
+              onclick="confirmAction('shutdown_device', 'Shutdown Device',
+                'This will immediately shut down the remote machine. It cannot be undone remotely.')">
+        Shutdown Device
+      </button>
+      <button class="btn btn-shutdown-net"
+              onclick="confirmAction('shutdown_and_disconnect', 'Shutdown + Disconnect',
+                'This will disconnect the network then shut down the remote machine.')">
+        Shutdown + Disconnect
+      </button>
     </div>
   </div>
 
@@ -320,7 +345,7 @@
 <!-- Confirmation Modal -->
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal">
-    <h3 id="modal-title">⚠ Confirm Action</h3>
+    <h3 id="modal-title">Confirm Action</h3>
     <p id="modal-body"></p>
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
@@ -414,10 +439,9 @@ const STATUS_MAP = { 3: 'Under Attack', 2: 'Warning', 1: 'Normal' };
 function updateStatus(severity) {
   const p = STATUS_PRIORITY[severity] || 1;
   const text = STATUS_MAP[p] || 'Normal';
-  const icons = { 'Normal': '✅', 'Warning': '⚠️', 'Under Attack': '🚨' };
   const banner = document.getElementById('status-banner');
   banner.className = `status-banner ${text}`;
-  banner.innerHTML = `<span class="status-icon">${icons[text]}</span> System Status: <span id="status-text">${text}</span>`;
+  banner.innerHTML = `System Status: <span id="status-text">${text}</span>`;
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
@@ -468,7 +492,7 @@ function doAction(commandType, serviceName = '') {
   .then(data => {
     showToast({
       severity: data.success ? 'LOW' : 'HIGH',
-      attack_type: data.success ? '✓ Command Sent' : '✗ Command Failed',
+      attack_type: data.success ? 'Command Sent' : 'Command Failed',
       username: commandType,
       source_ip: '',
       description: data.message,
@@ -477,10 +501,22 @@ function doAction(commandType, serviceName = '') {
   .catch(err => console.error('Command error:', err));
 }
 
+function doActionWithService(commandType) {
+  const svc = document.getElementById('service-name-input').value.trim();
+  if (!svc) {
+    showToast({ severity: 'MEDIUM', attack_type: 'Service name required',
+                username: '', source_ip: '',
+                description: 'Enter a service name in the input above before sending Stop Service.' });
+    document.getElementById('service-name-input').focus();
+    return;
+  }
+  doAction(commandType, svc);
+}
+
 // ── Confirm modal ──────────────────────────────────────────────────────────
 function confirmAction(commandType, title, body) {
   pendingAction = commandType;
-  document.getElementById('modal-title').textContent = `⚠ ${title}`;
+  document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').textContent = body;
   document.getElementById('confirm-modal').classList.add('open');
 }
