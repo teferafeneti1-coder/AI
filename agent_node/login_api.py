@@ -59,6 +59,34 @@ _mem_locked: dict[str, bool]   = {}
 _mem_reason: dict[str, str]    = {}
 _mem_lock = threading.Lock()
 
+# ── Machine-level disconnect state ────────────────────────────────────────────
+# Set by executor.py BEFORE the network adapter is disabled so the React
+# page has a 3-second window to poll, render DisconnectedScreen, then the
+# real netsh command fires.
+_machine_status: str = "online"          # "online" | "disconnected"
+_disconnect_username: str = ""           # who triggered the alert
+_disconnect_time: float = 0.0            # unix timestamp
+_machine_status_lock = threading.Lock()
+
+
+def set_machine_disconnected(triggered_by: str) -> None:
+    """Called by executor.py before running netsh/ip link."""
+    global _machine_status, _disconnect_username, _disconnect_time
+    with _machine_status_lock:
+        _machine_status       = "disconnected"
+        _disconnect_username  = triggered_by
+        _disconnect_time      = time.time()
+    log_json("machine_status_disconnected", triggered_by=triggered_by)
+
+
+def get_machine_status() -> dict:
+    with _machine_status_lock:
+        return {
+            "status":    _machine_status,
+            "username":  _disconnect_username,
+            "timestamp": int(_disconnect_time) if _disconnect_time else 0,
+        }
+
 
 def set_account_locked(username: str,
                        reason: str = "Locked by HIDS administrator") -> None:
@@ -141,6 +169,21 @@ def account_status():
 
     locked, reason = is_locked(username)
     return jsonify({"locked": locked, "username": username, "reason": reason})
+
+
+# ── Machine status endpoint ───────────────────────────────────────────────────
+@app.route("/api/machine-status")
+def machine_status():
+    """
+    GET /api/machine-status
+    Polled every 2 s by ALL React screens.
+    Returns {"status": "online"|"disconnected", "username": str, "timestamp": int}
+
+    executor.py calls set_machine_disconnected() BEFORE running netsh,
+    giving the React frontend a 3-second window to render DisconnectedScreen
+    before connectivity is actually lost.
+    """
+    return jsonify(get_machine_status())
 
 
 # ── Login endpoint ────────────────────────────────────────────────────────────

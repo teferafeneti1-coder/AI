@@ -1,27 +1,55 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import LoginForm from './components/LoginForm'
 import SuccessScreen from './components/SuccessScreen'
 import AlertScreen from './components/AlertScreen'
 import LockedScreen from './components/LockedScreen'
+import DisconnectedScreen from './components/DisconnectedScreen'
 
 const MAX_ATTEMPTS = 5
 
 export default function App() {
-  const [screen, setScreen]         = useState('login')
-  const [failCount, setFailCount]   = useState(0)
-  const [lastUser, setLastUser]     = useState('')
-  const [lockReason, setLockReason] = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
+  const [screen, setScreen]           = useState('login')
+  const [failCount, setFailCount]     = useState(0)
+  const [lastUser, setLastUser]       = useState('')
+  const [lockReason, setLockReason]   = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
+  const [disconnectInfo, setDisconnectInfo] = useState({ username: '', timestamp: 0 })
 
-  // Called when LoginForm's /api/account-status poll detects a server-side lock.
-  // This is the ONLY path to LockedScreen — set by the HIDS admin, not the user.
+  // ── Global machine-status poll (runs on EVERY screen) ────────────────────
+  // executor.py calls set_machine_disconnected() BEFORE running netsh.
+  // This poll catches that state change within 2 s and switches immediately
+  // to DisconnectedScreen — before the network adapter is actually disabled.
+  useEffect(() => {
+    // Don't poll if already on the disconnected screen
+    if (screen === 'disconnected') return
+
+    const id = setInterval(async () => {
+      try {
+        const res  = await fetch('/api/machine-status')
+        const data = await res.json()
+        if (data.status === 'disconnected') {
+          clearInterval(id)
+          setDisconnectInfo({
+            username:  data.username  || '',
+            timestamp: data.timestamp || 0,
+          })
+          setScreen('disconnected')
+        }
+      } catch { /* server not reachable — keep polling until it is */ }
+    }, 2000)
+
+    return () => clearInterval(id)
+  }, [screen])
+
+  // ── Lock detected by account-status poll (LoginForm callback) ────────────
   const handleLockedByHIDS = useCallback((username, reason) => {
     setLastUser(username)
     setLockReason(reason || 'This account has been locked by the HIDS administrator.')
     setScreen('locked')
   }, [])
 
+  // ── Login submit ──────────────────────────────────────────────────────────
   async function handleSubmit(username, password) {
     setLoading(true)
     setError('')
@@ -36,24 +64,16 @@ export default function App() {
       const data = await res.json()
 
       if (res.status === 423 || data.locked) {
-        // Account was locked by the HIDS admin while the user was typing
         setLockReason(data.message || 'Account locked by administrator.')
         setScreen('locked')
-
       } else if (res.ok && data.success) {
-        // Correct credentials
         setFailCount(0)
         setScreen('success')
-
       } else {
-        // Wrong credentials — increment counter, show alert screen at threshold
         const next = failCount + 1
         setFailCount(next)
         setError(data.message || 'Invalid credentials')
-        if (next >= MAX_ATTEMPTS) {
-          // Show alert screen (display only — no action buttons)
-          setScreen('alert')
-        }
+        if (next >= MAX_ATTEMPTS) setScreen('alert')
       }
     } catch {
       setError('Could not reach server. Try again.')
@@ -68,6 +88,18 @@ export default function App() {
     setError('')
     setLastUser('')
     setLockReason('')
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // DisconnectedScreen takes priority over everything else — it is set by
+  // the global poll above and cannot be dismissed by the user.
+  if (screen === 'disconnected') {
+    return (
+      <DisconnectedScreen
+        username={disconnectInfo.username}
+        timestamp={disconnectInfo.timestamp}
+      />
+    )
   }
 
   return (
@@ -87,12 +119,12 @@ export default function App() {
         <SuccessScreen username={lastUser} onLogout={handleReset} />
       )}
 
-      {/* AlertScreen is display-only — no admin action buttons */}
+      {/* AlertScreen — display only, no admin action buttons */}
       {screen === 'alert' && (
         <AlertScreen username={lastUser} failCount={failCount} />
       )}
 
-      {/* LockedScreen — only reachable via HIDS admin action or HTTP 423 from server */}
+      {/* LockedScreen — only reachable via HIDS admin lock or HTTP 423 */}
       {screen === 'locked' && (
         <LockedScreen
           username={lastUser}

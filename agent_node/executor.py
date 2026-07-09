@@ -12,11 +12,12 @@ ignore          → no-op
 """
 
 import sys
+import time
 import logging
 import subprocess
 
 import supabase_db
-from login_api import set_account_locked
+from login_api import set_account_locked, set_machine_disconnected
 
 logger = logging.getLogger(__name__)
 
@@ -92,29 +93,36 @@ def _win_stop_service(service_name: str) -> tuple[bool, str]:
         return False, f"Unexpected error: {e}"
 
 
-def _win_disconnect_network() -> tuple[bool, str]:
+def _win_disconnect_network(triggered_by: str = "") -> tuple[bool, str]:
     """
-    Disable every active non-loopback, non-virtual network adapter using
-    `netsh interface set interface "<name>" admin=disable`.
-    Returns a list of adapters that were disabled.
+    Sequence:
+      1. Call set_machine_disconnected() — React polls this every 2 s and
+         immediately switches to DisconnectedScreen.
+      2. Sleep 3 s — gives the browser time to render the block page.
+      3. Run netsh to physically disable every active adapter.
     """
+    # ── Step 1: notify the frontend ──────────────────────────────────────────
+    set_machine_disconnected(triggered_by)
+    logger.info("Disconnect notification sent; waiting 3 s for browser to render…")
+
+    # ── Step 2: wait ─────────────────────────────────────────────────────────
+    time.sleep(3)
+
+    # ── Step 3: disable adapters ──────────────────────────────────────────────
     try:
-        # Get adapter names whose AdminState is Enabled
         list_result = subprocess.run(
             ["netsh", "interface", "show", "interface"],
             capture_output=True, text=True, timeout=10,
         )
         disabled = []
         for line in list_result.stdout.splitlines():
-            # Lines look like:  Enabled    Connected    <type>  <name>
             parts = line.split()
             if len(parts) < 4:
                 continue
-            admin_state = parts[0]
+            admin_state  = parts[0]
             adapter_name = " ".join(parts[3:])
             if admin_state.lower() != "enabled":
                 continue
-            # Skip loopback and virtual adapters
             skip_keywords = ("loopback", "virtual", "bluetooth", "teredo",
                              "isatap", "6to4", "tunnel")
             if any(k in adapter_name.lower() for k in skip_keywords):
@@ -171,7 +179,18 @@ def _linux_stop_service(service_name: str) -> tuple[bool, str]:
         return False, f"Unexpected error: {e}"
 
 
-def _linux_disconnect_network() -> tuple[bool, str]:
+def _linux_disconnect_network(triggered_by: str = "") -> tuple[bool, str]:
+    """
+    Sequence: notify frontend → sleep 3 s → disable interfaces.
+    """
+    # ── Step 1: notify ────────────────────────────────────────────────────────
+    set_machine_disconnected(triggered_by)
+    logger.info("Disconnect notification sent; waiting 3 s…")
+
+    # ── Step 2: wait ──────────────────────────────────────────────────────────
+    time.sleep(3)
+
+    # ── Step 3: disable interfaces ────────────────────────────────────────────
     try:
         result = subprocess.run(
             ["ip", "-o", "link", "show"],
@@ -182,7 +201,7 @@ def _linux_disconnect_network() -> tuple[bool, str]:
             parts = line.split(":")
             if len(parts) < 2:
                 continue
-            iface = parts[1].strip().split("@")[0]  # strip VLAN suffix
+            iface = parts[1].strip().split("@")[0]
             if iface in ("lo",) or iface.startswith("docker"):
                 continue
             r = subprocess.run(
@@ -236,7 +255,9 @@ def execute_command(command_type: str,
         return _win_stop_service(service_name) if is_windows else _linux_stop_service(service_name)
 
     elif command_type == "disconnect_network":
-        return _win_disconnect_network() if is_windows else _linux_disconnect_network()
+        return (_win_disconnect_network(target_username)
+                if is_windows else
+                _linux_disconnect_network(target_username))
 
     elif command_type == "shutdown_device":
         return _win_shutdown() if is_windows else _linux_shutdown()
