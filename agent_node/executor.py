@@ -33,16 +33,37 @@ def _lock_account_supabase(username: str) -> tuple[bool, str]:
         if not ok:
             return False, msg
     else:
-        # Supabase not configured — still update in-memory lock
         msg = f"Supabase not configured; in-memory lock applied for '{username}'."
         logger.warning(msg)
 
-    # Notify login_api regardless (fast in-process path)
     set_account_locked(
         username,
         reason="This account has been locked by the HIDS administrator."
     )
     return True, f"Account '{username}' locked successfully."
+
+
+def _unlock_account_supabase(username: str) -> tuple[bool, str]:
+    """
+    Sets is_locked = false in Supabase for the given username.
+    Also clears the in-memory lock so the login page accepts logins again.
+    """
+    if supabase_db.is_configured():
+        ok, msg = supabase_db.unlock_user(username)
+        if not ok:
+            return False, msg
+    else:
+        msg = f"Supabase not configured; in-memory lock cleared for '{username}'."
+        logger.warning(msg)
+
+    # Clear in-process memory mirror
+    try:
+        from login_api import clear_account_lock
+        clear_account_lock(username)
+    except Exception as e:
+        logger.warning("Could not clear in-memory lock: %s", e)
+
+    return True, f"Account '{username}' unlocked successfully."
 
 
 # ─── Windows implementations ──────────────────────────────────────────────────
@@ -202,6 +223,9 @@ def execute_command(command_type: str,
     elif command_type == "lock_account":
         # Always goes through Supabase — no NET USER needed
         return _lock_account_supabase(target_username)
+
+    elif command_type == "unlock_account":
+        return _unlock_account_supabase(target_username)
 
     elif command_type == "stop_service":
         if not service_name:

@@ -14,7 +14,8 @@ export default function App() {
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
 
-  // ── Called when LoginForm's poll detects server-side lock ─────────────────
+  // Called when LoginForm's /api/account-status poll detects a server-side lock.
+  // This is the ONLY path to LockedScreen — set by the HIDS admin, not the user.
   const handleLockedByHIDS = useCallback((username, reason) => {
     setLastUser(username)
     setLockReason(reason || 'This account has been locked by the HIDS administrator.')
@@ -35,21 +36,22 @@ export default function App() {
       const data = await res.json()
 
       if (res.status === 423 || data.locked) {
-        // ── Account was locked by HIDS while user was trying ──────────────
+        // Account was locked by the HIDS admin while the user was typing
         setLockReason(data.message || 'Account locked by administrator.')
         setScreen('locked')
 
       } else if (res.ok && data.success) {
-        // ── Correct credentials ────────────────────────────────────────────
+        // Correct credentials
         setFailCount(0)
         setScreen('success')
 
       } else {
-        // ── Wrong credentials ──────────────────────────────────────────────
+        // Wrong credentials — increment counter, show alert screen at threshold
         const next = failCount + 1
         setFailCount(next)
         setError(data.message || 'Invalid credentials')
         if (next >= MAX_ATTEMPTS) {
+          // Show alert screen (display only — no action buttons)
           setScreen('alert')
         }
       }
@@ -85,18 +87,12 @@ export default function App() {
         <SuccessScreen username={lastUser} onLogout={handleReset} />
       )}
 
+      {/* AlertScreen is display-only — no admin action buttons */}
       {screen === 'alert' && (
-        <AlertScreen
-          username={lastUser}
-          failCount={failCount}
-          onLock={() => setScreen('locked')}
-          onDismiss={handleReset}
-        />
+        <AlertScreen username={lastUser} failCount={failCount} />
       )}
 
-      {/* LockedScreen is shown in two cases:
-          1. Admin clicks Lock Account on HIDS dashboard (polled / HTTP 423)
-          2. User clicks Lock Account locally on AlertScreen             */}
+      {/* LockedScreen — only reachable via HIDS admin action or HTTP 423 from server */}
       {screen === 'locked' && (
         <LockedScreen
           username={lastUser}

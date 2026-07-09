@@ -117,6 +117,7 @@
     .btn:disabled { opacity: .4; cursor: not-allowed; }
     .btn-ignore       { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
     .btn-lock         { background: #1f6feb; color: #fff; }
+    .btn-unlock       { background: #238636; color: #fff; }
     .btn-service      { background: #9e6a03; color: #fff; }
     .btn-network      { background: #6e40c9; color: #fff; }
     .btn-shutdown     { background: #da3633; color: #fff; }
@@ -275,6 +276,11 @@
     <div class="actions-grid">
       <button class="btn btn-ignore"   onclick="doAction('ignore')">Ignore</button>
       <button class="btn btn-lock"     onclick="doAction('lock_account')">Lock Account</button>
+      <button class="btn btn-unlock"
+              onclick="confirmAction('unlock_account', 'Enable Account',
+                'This will re-enable the account and allow the user to log in again.')">
+        Enable Account
+      </button>
       <button class="btn btn-network"
               onclick="confirmAction('disconnect_network', 'Disconnect Network',
                 'This will disable the network adapter on the remote machine. The agent will go offline.')">
@@ -518,6 +524,7 @@ function confirmAction(commandType, title, body) {
   pendingAction = commandType;
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').textContent = body;
+  _styleConfirmBtn(commandType);
   document.getElementById('confirm-modal').classList.add('open');
 }
 
@@ -534,6 +541,16 @@ function confirmAndSend() {
     setTimeout(() => doAction('shutdown_device'), 800);
   } else {
     doAction(pendingAction);
+  }
+}
+
+// Colour the confirm button based on whether the action is destructive
+function _styleConfirmBtn(commandType) {
+  const btn = document.getElementById('modal-confirm-btn');
+  if (commandType === 'unlock_account') {
+    btn.style.background = '#238636';   // green — safe action
+  } else {
+    btn.style.background = '';           // default (red from .btn-shutdown)
   }
 }
 

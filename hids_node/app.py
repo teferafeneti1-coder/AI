@@ -142,7 +142,7 @@ def api_command():
     alert_id = data.get("alert_id", "").strip()
     service_name = data.get("service_name", "").strip()
 
-    allowed = {"ignore", "lock_account", "stop_service",
+    allowed = {"ignore", "lock_account", "unlock_account", "stop_service",
                 "disconnect_network", "shutdown_device"}
     if command_type not in allowed:
         return jsonify({"success": False, "message": "Unknown command type"}), 400
